@@ -1,0 +1,1104 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Visual Inspector</title>
+  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
+  <style>
+    :root {
+      /* Tema oscuro por defecto */
+      --bg-primary: #0a0a0a;
+      --bg-secondary: #141414;
+      --bg-tertiary: #1f1f1f;
+      --border: #2a2a2a;
+      --text-primary: #f5f5f5;
+      --text-secondary: #a0a0a0;
+      --text-muted: #666;
+      --accent: #3b82f6;
+      --accent-hover: #2563eb;
+      --success: #22c55e;
+      --warning: #eab308;
+      --error: #ef4444;
+      --highlight-hover: rgba(59, 130, 246, 0.3);
+      --highlight-selected: rgba(34, 197, 94, 0.3);
+      --highlight-edited: rgba(234, 179, 8, 0.5);
+    }
+
+    [data-theme="light"] {
+      --bg-primary: #ffffff;
+      --bg-secondary: #f8f8f8;
+      --bg-tertiary: #f0f0f0;
+      --border: #e0e0e0;
+      --text-primary: #1a1a1a;
+      --text-secondary: #666;
+      --text-muted: #999;
+    }
+
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: var(--bg-primary);
+      color: var(--text-primary);
+      height: 100vh;
+      overflow: hidden;
+    }
+
+    /* Layout principal */
+    .app {
+      display: grid;
+      grid-template-rows: 48px 1fr;
+      height: 100vh;
+    }
+
+    /* Toolbar superior */
+    .toolbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 16px;
+      background: var(--bg-secondary);
+      border-bottom: 1px solid var(--border);
+    }
+
+    .toolbar-left,
+    .toolbar-right {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .toolbar h1 {
+      font-size: 14px;
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .file-name {
+      font-size: 12px;
+      color: var(--text-secondary);
+      padding: 4px 8px;
+      background: var(--bg-tertiary);
+      border-radius: 4px;
+    }
+
+    /* Botones de toolbar */
+    .btn {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      padding: 6px 12px;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      background: var(--bg-tertiary);
+      color: var(--text-primary);
+      font-size: 12px;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+
+    .btn:hover {
+      background: var(--bg-secondary);
+      border-color: var(--accent);
+    }
+
+    .btn-icon {
+      padding: 6px;
+    }
+
+    .btn-primary {
+      background: var(--accent);
+      border-color: var(--accent);
+      color: white;
+    }
+
+    .btn-primary:hover {
+      background: var(--accent-hover);
+    }
+
+    /* Selector de viewport */
+    .viewport-selector {
+      display: flex;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      overflow: hidden;
+    }
+
+    .viewport-btn {
+      padding: 6px 10px;
+      background: var(--bg-tertiary);
+      border: none;
+      color: var(--text-secondary);
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+
+    .viewport-btn:hover {
+      background: var(--bg-secondary);
+    }
+
+    .viewport-btn.active {
+      background: var(--accent);
+      color: white;
+    }
+
+    /* Indicador de conexión */
+    .connection-status {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 11px;
+      color: var(--text-muted);
+    }
+
+    .status-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--error);
+    }
+
+    .status-dot.connected {
+      background: var(--success);
+    }
+
+    /* Panel principal */
+    .main-panel {
+      display: grid;
+      grid-template-columns: 1fr 320px;
+      overflow: hidden;
+    }
+
+    /* Panel de preview */
+    .preview-panel {
+      position: relative;
+      background: var(--bg-tertiary);
+      overflow: auto;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+    }
+
+    .preview-container {
+      background: white;
+      box-shadow: 0 4px 24px rgba(0, 0, 0, 0.3);
+      border-radius: 8px;
+      overflow: hidden;
+      transition: width 0.3s, height 0.3s;
+    }
+
+    .preview-container.mobile {
+      width: 375px;
+      height: 667px;
+    }
+
+    .preview-container.tablet {
+      width: 768px;
+      height: 1024px;
+    }
+
+    .preview-container.desktop {
+      width: 100%;
+      max-width: 1200px;
+      height: 100%;
+    }
+
+    .preview-iframe {
+      width: 100%;
+      height: 100%;
+      border: none;
+    }
+
+    /* Estado vacío */
+    .empty-state {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 16px;
+      color: var(--text-muted);
+      text-align: center;
+    }
+
+    .empty-state svg {
+      opacity: 0.5;
+    }
+
+    /* Panel inspector */
+    .inspector-panel {
+      background: var(--bg-secondary);
+      border-left: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    .inspector-header {
+      padding: 12px 16px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .inspector-header h2 {
+      font-size: 12px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      color: var(--text-secondary);
+    }
+
+    /* Selector display */
+    .selector-display {
+      padding: 12px 16px;
+      background: var(--bg-tertiary);
+      border-bottom: 1px solid var(--border);
+    }
+
+    .selector-label {
+      font-size: 10px;
+      color: var(--text-muted);
+      margin-bottom: 4px;
+    }
+
+    .selector-value {
+      font-family: 'SF Mono', Monaco, monospace;
+      font-size: 12px;
+      color: var(--accent);
+      word-break: break-all;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .copy-btn {
+      padding: 4px;
+      border: none;
+      background: none;
+      color: var(--text-muted);
+      cursor: pointer;
+      border-radius: 4px;
+    }
+
+    .copy-btn:hover {
+      color: var(--text-primary);
+      background: var(--bg-secondary);
+    }
+
+    /* Secciones de propiedades */
+    .inspector-content {
+      flex: 1;
+      overflow-y: auto;
+      padding: 8px 0;
+    }
+
+    .property-section {
+      border-bottom: 1px solid var(--border);
+    }
+
+    .section-header {
+      padding: 8px 16px;
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--text-secondary);
+      background: var(--bg-tertiary);
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .section-header:hover {
+      background: var(--bg-secondary);
+    }
+
+    .section-content {
+      padding: 8px 16px;
+    }
+
+    /* Campos de propiedad */
+    .property-row {
+      display: grid;
+      grid-template-columns: 90px 1fr;
+      gap: 8px;
+      align-items: center;
+      margin-bottom: 8px;
+    }
+
+    .property-label {
+      font-size: 11px;
+      color: var(--text-secondary);
+    }
+
+    .property-input {
+      padding: 6px 8px;
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      background: var(--bg-tertiary);
+      color: var(--text-primary);
+      font-size: 12px;
+      font-family: 'SF Mono', Monaco, monospace;
+    }
+
+    .property-input:focus {
+      outline: none;
+      border-color: var(--accent);
+    }
+
+    /* Color picker */
+    .color-input-wrapper {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+    }
+
+    .color-preview {
+      width: 24px;
+      height: 24px;
+      border-radius: 4px;
+      border: 1px solid var(--border);
+      cursor: pointer;
+    }
+
+    .color-input {
+      position: absolute;
+      opacity: 0;
+      width: 0;
+      height: 0;
+    }
+
+    /* Dimensiones grid */
+    .dimensions-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+    }
+
+    .dimension-field {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .dimension-field label {
+      font-size: 10px;
+      color: var(--text-muted);
+    }
+
+    /* Footer con botón aplicar */
+    .inspector-footer {
+      padding: 12px 16px;
+      border-top: 1px solid var(--border);
+      display: flex;
+      gap: 8px;
+    }
+
+    .inspector-footer .btn {
+      flex: 1;
+    }
+
+    /* Estado sin selección */
+    .no-selection {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      height: 100%;
+      color: var(--text-muted);
+      text-align: center;
+      padding: 24px;
+    }
+
+    .no-selection svg {
+      margin-bottom: 12px;
+      opacity: 0.5;
+    }
+
+    /* Animación de flash para elementos editados */
+    @keyframes flash-edited {
+      0%, 100% { box-shadow: none; }
+      50% { box-shadow: 0 0 0 3px var(--highlight-edited); }
+    }
+
+    .flash-edited {
+      animation: flash-edited 0.5s ease-out 2;
+    }
+
+    /* Scrollbar personalizado */
+    ::-webkit-scrollbar {
+      width: 8px;
+      height: 8px;
+    }
+
+    ::-webkit-scrollbar-track {
+      background: var(--bg-tertiary);
+    }
+
+    ::-webkit-scrollbar-thumb {
+      background: var(--border);
+      border-radius: 4px;
+    }
+
+    ::-webkit-scrollbar-thumb:hover {
+      background: var(--text-muted);
+    }
+  </style>
+</head>
+<body>
+  <div class="app" id="app">
+    <!-- Toolbar -->
+    <div class="toolbar">
+      <div class="toolbar-left">
+        <h1>
+          <i data-lucide="eye" style="width: 18px; height: 18px;"></i>
+          Visual Inspector
+        </h1>
+        <span class="file-name" id="fileName">Sin archivo</span>
+      </div>
+      <div class="toolbar-right">
+        <!-- Viewport selector -->
+        <div class="viewport-selector">
+          <button class="viewport-btn" data-viewport="mobile" title="Mobile (375px)">
+            <i data-lucide="smartphone" style="width: 16px; height: 16px;"></i>
+          </button>
+          <button class="viewport-btn" data-viewport="tablet" title="Tablet (768px)">
+            <i data-lucide="tablet" style="width: 16px; height: 16px;"></i>
+          </button>
+          <button class="viewport-btn active" data-viewport="desktop" title="Desktop">
+            <i data-lucide="monitor" style="width: 16px; height: 16px;"></i>
+          </button>
+        </div>
+
+        <!-- Reload -->
+        <button class="btn btn-icon" id="reloadBtn" title="Recargar">
+          <i data-lucide="refresh-cw" style="width: 16px; height: 16px;"></i>
+        </button>
+
+        <!-- Theme toggle -->
+        <button class="btn btn-icon" id="themeToggle" title="Cambiar tema">
+          <i data-lucide="moon" style="width: 16px; height: 16px;"></i>
+        </button>
+
+        <!-- Estado conexión -->
+        <div class="connection-status">
+          <span class="status-dot" id="statusDot"></span>
+          <span id="statusText">Desconectado</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Panel principal -->
+    <div class="main-panel">
+      <!-- Preview -->
+      <div class="preview-panel">
+        <div class="preview-container desktop" id="previewContainer">
+          <div class="empty-state" id="emptyState">
+            <i data-lucide="file-code" style="width: 48px; height: 48px;"></i>
+            <div>
+              <p>Ningún archivo abierto</p>
+              <p style="font-size: 12px; margin-top: 8px;">
+                Usa <code>inspect_html</code> en Claude Code<br>
+                para abrir un archivo HTML
+              </p>
+            </div>
+          </div>
+          <iframe class="preview-iframe" id="previewIframe" style="display: none;"></iframe>
+        </div>
+      </div>
+
+      <!-- Inspector -->
+      <div class="inspector-panel">
+        <div class="inspector-header">
+          <h2>Inspector</h2>
+        </div>
+
+        <!-- Selector del elemento -->
+        <div class="selector-display" id="selectorDisplay" style="display: none;">
+          <div class="selector-label">Selector CSS</div>
+          <div class="selector-value">
+            <span id="selectorText"></span>
+            <button class="copy-btn" id="copySelector" title="Copiar selector">
+              <i data-lucide="copy" style="width: 14px; height: 14px;"></i>
+            </button>
+          </div>
+        </div>
+
+        <!-- Contenido del inspector -->
+        <div class="inspector-content" id="inspectorContent">
+          <div class="no-selection" id="noSelection">
+            <i data-lucide="mouse-pointer-click" style="width: 32px; height: 32px;"></i>
+            <p>Haz click en un elemento<br>para inspeccionarlo</p>
+          </div>
+
+          <!-- Propiedades (se muestran al seleccionar) -->
+          <div id="propertiesPanel" style="display: none;">
+            <!-- Color -->
+            <div class="property-section">
+              <div class="section-header">
+                <i data-lucide="palette" style="width: 14px; height: 14px;"></i>
+                Colores
+              </div>
+              <div class="section-content">
+                <div class="property-row">
+                  <span class="property-label">Color</span>
+                  <div class="color-input-wrapper">
+                    <div class="color-preview" id="colorPreview" style="background: #ffffff;"></div>
+                    <input type="color" class="color-input" id="colorPicker">
+                    <input type="text" class="property-input" id="colorValue" placeholder="#ffffff" style="flex: 1;">
+                  </div>
+                </div>
+                <div class="property-row">
+                  <span class="property-label">Background</span>
+                  <div class="color-input-wrapper">
+                    <div class="color-preview" id="bgPreview" style="background: #ffffff;"></div>
+                    <input type="color" class="color-input" id="bgPicker">
+                    <input type="text" class="property-input" id="bgValue" placeholder="#ffffff" style="flex: 1;">
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Dimensiones -->
+            <div class="property-section">
+              <div class="section-header">
+                <i data-lucide="move" style="width: 14px; height: 14px;"></i>
+                Dimensiones
+              </div>
+              <div class="section-content">
+                <div class="dimensions-grid">
+                  <div class="dimension-field">
+                    <label>Width</label>
+                    <input type="text" class="property-input" id="widthValue" placeholder="auto">
+                  </div>
+                  <div class="dimension-field">
+                    <label>Height</label>
+                    <input type="text" class="property-input" id="heightValue" placeholder="auto">
+                  </div>
+                  <div class="dimension-field">
+                    <label>Padding</label>
+                    <input type="text" class="property-input" id="paddingValue" placeholder="0">
+                  </div>
+                  <div class="dimension-field">
+                    <label>Margin</label>
+                    <input type="text" class="property-input" id="marginValue" placeholder="0">
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Tipografía -->
+            <div class="property-section">
+              <div class="section-header">
+                <i data-lucide="type" style="width: 14px; height: 14px;"></i>
+                Tipografía
+              </div>
+              <div class="section-content">
+                <div class="property-row">
+                  <span class="property-label">Font Size</span>
+                  <input type="text" class="property-input" id="fontSizeValue" placeholder="16px">
+                </div>
+                <div class="property-row">
+                  <span class="property-label">Font Weight</span>
+                  <input type="text" class="property-input" id="fontWeightValue" placeholder="400">
+                </div>
+                <div class="property-row">
+                  <span class="property-label">Line Height</span>
+                  <input type="text" class="property-input" id="lineHeightValue" placeholder="1.5">
+                </div>
+              </div>
+            </div>
+
+            <!-- Layout -->
+            <div class="property-section">
+              <div class="section-header">
+                <i data-lucide="layout-grid" style="width: 14px; height: 14px;"></i>
+                Layout
+              </div>
+              <div class="section-content">
+                <div class="property-row">
+                  <span class="property-label">Display</span>
+                  <input type="text" class="property-input" id="displayValue" placeholder="block">
+                </div>
+                <div class="property-row">
+                  <span class="property-label">Position</span>
+                  <input type="text" class="property-input" id="positionValue" placeholder="static">
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Footer con botones -->
+        <div class="inspector-footer" id="inspectorFooter" style="display: none;">
+          <button class="btn btn-primary" id="applyBtn">
+            <i data-lucide="check" style="width: 14px; height: 14px;"></i>
+            Aplicar cambios
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // Configuración WebSocket
+    const WS_PORT = 7777;
+    let ws = null;
+    let reconnectInterval = null;
+    let currentFilePath = null;
+    let selectedElement = null;
+    let pendingChanges = {};
+
+    // Referencias DOM
+    const app = document.getElementById('app');
+    const fileName = document.getElementById('fileName');
+    const statusDot = document.getElementById('statusDot');
+    const statusText = document.getElementById('statusText');
+    const previewContainer = document.getElementById('previewContainer');
+    const previewIframe = document.getElementById('previewIframe');
+    const emptyState = document.getElementById('emptyState');
+    const selectorDisplay = document.getElementById('selectorDisplay');
+    const selectorText = document.getElementById('selectorText');
+    const noSelection = document.getElementById('noSelection');
+    const propertiesPanel = document.getElementById('propertiesPanel');
+    const inspectorFooter = document.getElementById('inspectorFooter');
+
+    // Inicializar Lucide icons
+    lucide.createIcons();
+
+    // Conectar WebSocket
+    function connect() {
+      ws = new WebSocket(`ws://localhost:${WS_PORT}`);
+
+      ws.onopen = () => {
+        statusDot.classList.add('connected');
+        statusText.textContent = 'Conectado';
+        ws.send(JSON.stringify({ type: 'ready' }));
+        if (reconnectInterval) {
+          clearInterval(reconnectInterval);
+          reconnectInterval = null;
+        }
+      };
+
+      ws.onclose = () => {
+        statusDot.classList.remove('connected');
+        statusText.textContent = 'Desconectado';
+        // Intentar reconectar cada 2 segundos
+        if (!reconnectInterval) {
+          reconnectInterval = setInterval(connect, 2000);
+        }
+      };
+
+      ws.onerror = () => {
+        ws.close();
+      };
+
+      ws.onmessage = (event) => {
+        const message = JSON.parse(event.data);
+        handleMessage(message);
+      };
+    }
+
+    // Manejar mensajes del servidor
+    function handleMessage(message) {
+      switch (message.type) {
+        case 'load-html':
+          loadHtml(message.payload.filePath, message.payload.content);
+          break;
+
+        case 'file-changed':
+          // Hot reload
+          loadHtml(message.payload.filePath, message.payload.content, true);
+          break;
+
+        case 'highlight-element':
+          highlightElement(message.payload.selector);
+          break;
+
+        case 'css-applied':
+          flashEditedElement(message.payload.selector);
+          break;
+
+        case 'pong':
+          // Keep-alive response
+          break;
+      }
+    }
+
+    // Cargar HTML en el iframe
+    function loadHtml(filePath, content, isReload = false) {
+      currentFilePath = filePath;
+      fileName.textContent = filePath.split('/').pop();
+
+      // Mostrar iframe, ocultar empty state
+      emptyState.style.display = 'none';
+      previewIframe.style.display = 'block';
+
+      // Inyectar script de selección en el HTML
+      const injectedScript = `
+        <script>
+          // Estado de selección
+          let hoveredElement = null;
+          let selectedElement = null;
+
+          // Crear overlay para highlight
+          const overlay = document.createElement('div');
+          overlay.id = 'inspector-overlay';
+          overlay.style.cssText = 'position: fixed; pointer-events: none; z-index: 999999; transition: all 0.1s;';
+          document.body.appendChild(overlay);
+
+          // Highlight en hover
+          document.addEventListener('mousemove', (e) => {
+            const el = document.elementFromPoint(e.clientX, e.clientY);
+            if (el && el !== hoveredElement && el.id !== 'inspector-overlay') {
+              hoveredElement = el;
+              const rect = el.getBoundingClientRect();
+              overlay.style.left = rect.left + 'px';
+              overlay.style.top = rect.top + 'px';
+              overlay.style.width = rect.width + 'px';
+              overlay.style.height = rect.height + 'px';
+              overlay.style.border = '2px solid #3b82f6';
+              overlay.style.background = 'rgba(59, 130, 246, 0.1)';
+            }
+          });
+
+          // Seleccionar en click
+          document.addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+
+            const el = e.target;
+            if (el.id === 'inspector-overlay') return;
+
+            selectedElement = el;
+            const rect = el.getBoundingClientRect();
+            overlay.style.border = '2px solid #22c55e';
+            overlay.style.background = 'rgba(34, 197, 94, 0.1)';
+
+            // Calcular selector único
+            const selector = getUniqueSelector(el);
+
+            // Obtener estilos computados
+            const computed = window.getComputedStyle(el);
+            const styles = {
+              color: computed.color,
+              backgroundColor: computed.backgroundColor,
+              width: computed.width,
+              height: computed.height,
+              padding: computed.padding,
+              margin: computed.margin,
+              fontSize: computed.fontSize,
+              fontWeight: computed.fontWeight,
+              lineHeight: computed.lineHeight,
+              display: computed.display,
+              position: computed.position
+            };
+
+            // Enviar a parent
+            window.parent.postMessage({
+              type: 'element-selected',
+              payload: {
+                selector: selector,
+                tag: el.tagName.toLowerCase(),
+                line: 0, // Difícil calcular sin source map
+                styles: styles
+              }
+            }, '*');
+          }, true);
+
+          // Función para obtener selector único
+          function getUniqueSelector(el) {
+            if (el.id) return '#' + el.id;
+
+            const path = [];
+            while (el && el.nodeType === Node.ELEMENT_NODE) {
+              let selector = el.tagName.toLowerCase();
+
+              if (el.className && typeof el.className === 'string') {
+                const classes = el.className.trim().split(/\\s+/).filter(c => c && c !== 'inspector-overlay');
+                if (classes.length) {
+                  selector += '.' + classes.join('.');
+                }
+              }
+
+              // Añadir :nth-child si hay hermanos del mismo tipo
+              const siblings = el.parentNode ? Array.from(el.parentNode.children).filter(
+                s => s.tagName === el.tagName
+              ) : [];
+              if (siblings.length > 1) {
+                const index = siblings.indexOf(el) + 1;
+                selector += ':nth-child(' + index + ')';
+              }
+
+              path.unshift(selector);
+
+              if (el.id || path.length > 3) break;
+              el = el.parentNode;
+            }
+
+            return path.join(' > ');
+          }
+
+          // Resaltar elemento por selector (comando del servidor)
+          window.addEventListener('message', (e) => {
+            if (e.data.type === 'highlight') {
+              const el = document.querySelector(e.data.selector);
+              if (el) {
+                selectedElement = el;
+                const rect = el.getBoundingClientRect();
+                overlay.style.left = rect.left + 'px';
+                overlay.style.top = rect.top + 'px';
+                overlay.style.width = rect.width + 'px';
+                overlay.style.height = rect.height + 'px';
+                overlay.style.border = '2px solid #22c55e';
+                overlay.style.background = 'rgba(34, 197, 94, 0.1)';
+              }
+            }
+
+            if (e.data.type === 'flash') {
+              const el = document.querySelector(e.data.selector);
+              if (el) {
+                el.style.transition = 'box-shadow 0.3s';
+                el.style.boxShadow = '0 0 0 4px rgba(234, 179, 8, 0.8)';
+                setTimeout(() => {
+                  el.style.boxShadow = '';
+                }, 1000);
+              }
+            }
+          });
+        <\/script>
+      `;
+
+      // Insertar script antes de </body>
+      let modifiedContent = content;
+      if (content.includes('</body>')) {
+        modifiedContent = content.replace('</body>', injectedScript + '</body>');
+      } else {
+        modifiedContent = content + injectedScript;
+      }
+
+      // Escribir al iframe
+      previewIframe.srcdoc = modifiedContent;
+
+      // Si es reload, mantener selección
+      if (isReload && selectedElement) {
+        setTimeout(() => {
+          highlightElement(selectedElement.selector);
+        }, 100);
+      }
+    }
+
+    // Escuchar mensajes del iframe
+    window.addEventListener('message', (e) => {
+      if (e.data.type === 'element-selected') {
+        selectedElement = e.data.payload;
+        showElementProperties(selectedElement);
+
+        // Enviar al servidor MCP
+        if (ws && ws.readyState === WebSocket.OPEN) {
+          ws.send(JSON.stringify({
+            type: 'element-selected',
+            payload: selectedElement
+          }));
+        }
+      }
+    });
+
+    // Mostrar propiedades del elemento
+    function showElementProperties(element) {
+      selectorDisplay.style.display = 'block';
+      selectorText.textContent = element.selector;
+      noSelection.style.display = 'none';
+      propertiesPanel.style.display = 'block';
+      inspectorFooter.style.display = 'flex';
+
+      // Rellenar campos con estilos actuales
+      const s = element.styles;
+
+      // Colores
+      setColorField('color', s.color);
+      setColorField('bg', s.backgroundColor);
+
+      // Dimensiones
+      document.getElementById('widthValue').value = s.width || '';
+      document.getElementById('heightValue').value = s.height || '';
+      document.getElementById('paddingValue').value = s.padding || '';
+      document.getElementById('marginValue').value = s.margin || '';
+
+      // Tipografía
+      document.getElementById('fontSizeValue').value = s.fontSize || '';
+      document.getElementById('fontWeightValue').value = s.fontWeight || '';
+      document.getElementById('lineHeightValue').value = s.lineHeight || '';
+
+      // Layout
+      document.getElementById('displayValue').value = s.display || '';
+      document.getElementById('positionValue').value = s.position || '';
+
+      // Reset pending changes
+      pendingChanges = {};
+    }
+
+    // Configurar campo de color
+    function setColorField(prefix, value) {
+      const preview = document.getElementById(prefix + 'Preview');
+      const picker = document.getElementById(prefix + 'Picker');
+      const input = document.getElementById(prefix + 'Value');
+
+      // Convertir rgb a hex para el picker
+      const hex = rgbToHex(value);
+      preview.style.background = value;
+      picker.value = hex;
+      input.value = value;
+
+      // Click en preview abre picker
+      preview.onclick = () => picker.click();
+
+      // Actualizar al cambiar picker
+      picker.onchange = () => {
+        const color = picker.value;
+        preview.style.background = color;
+        input.value = color;
+        trackChange(prefix === 'color' ? 'color' : 'background-color', color);
+      };
+
+      // Actualizar al escribir manualmente
+      input.onchange = () => {
+        const color = input.value;
+        preview.style.background = color;
+        picker.value = rgbToHex(color);
+        trackChange(prefix === 'color' ? 'color' : 'background-color', color);
+      };
+    }
+
+    // Convertir RGB a Hex
+    function rgbToHex(rgb) {
+      if (!rgb || rgb === 'transparent') return '#ffffff';
+      if (rgb.startsWith('#')) return rgb;
+
+      const match = rgb.match(/rgba?\((\d+),\s*(\d+),\s*(\d+)/);
+      if (!match) return '#ffffff';
+
+      const r = parseInt(match[1]).toString(16).padStart(2, '0');
+      const g = parseInt(match[2]).toString(16).padStart(2, '0');
+      const b = parseInt(match[3]).toString(16).padStart(2, '0');
+      return '#' + r + g + b;
+    }
+
+    // Rastrear cambios para aplicar
+    function trackChange(property, value) {
+      pendingChanges[property] = value;
+    }
+
+    // Configurar listeners para todos los campos de propiedad
+    function setupPropertyListeners() {
+      const fields = [
+        { id: 'widthValue', prop: 'width' },
+        { id: 'heightValue', prop: 'height' },
+        { id: 'paddingValue', prop: 'padding' },
+        { id: 'marginValue', prop: 'margin' },
+        { id: 'fontSizeValue', prop: 'font-size' },
+        { id: 'fontWeightValue', prop: 'font-weight' },
+        { id: 'lineHeightValue', prop: 'line-height' },
+        { id: 'displayValue', prop: 'display' },
+        { id: 'positionValue', prop: 'position' }
+      ];
+
+      fields.forEach(({ id, prop }) => {
+        const input = document.getElementById(id);
+        input.onchange = () => trackChange(prop, input.value);
+      });
+    }
+
+    // Aplicar cambios
+    document.getElementById('applyBtn').onclick = () => {
+      if (!selectedElement || Object.keys(pendingChanges).length === 0) return;
+
+      // Enviar cada cambio al servidor
+      Object.entries(pendingChanges).forEach(([property, value]) => {
+        if (ws && ws.readyState === WebSocket.OPEN) {
+          ws.send(JSON.stringify({
+            type: 'apply-css',
+            payload: {
+              selector: selectedElement.selector,
+              property: property,
+              value: value
+            }
+          }));
+        }
+      });
+
+      // Reset
+      pendingChanges = {};
+    };
+
+    // Copiar selector
+    document.getElementById('copySelector').onclick = () => {
+      if (selectedElement) {
+        navigator.clipboard.writeText(selectedElement.selector);
+      }
+    };
+
+    // Resaltar elemento desde el servidor
+    function highlightElement(selector) {
+      previewIframe.contentWindow.postMessage({
+        type: 'highlight',
+        selector: selector
+      }, '*');
+    }
+
+    // Flash elemento editado
+    function flashEditedElement(selector) {
+      previewIframe.contentWindow.postMessage({
+        type: 'flash',
+        selector: selector
+      }, '*');
+    }
+
+    // Viewport selector
+    document.querySelectorAll('.viewport-btn').forEach(btn => {
+      btn.onclick = () => {
+        document.querySelectorAll('.viewport-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        previewContainer.className = 'preview-container ' + btn.dataset.viewport;
+      };
+    });
+
+    // Reload
+    document.getElementById('reloadBtn').onclick = () => {
+      if (previewIframe.srcdoc) {
+        const content = previewIframe.srcdoc;
+        previewIframe.srcdoc = '';
+        setTimeout(() => { previewIframe.srcdoc = content; }, 50);
+      }
+    };
+
+    // Theme toggle
+    document.getElementById('themeToggle').onclick = () => {
+      const current = app.dataset.theme || 'dark';
+      const newTheme = current === 'dark' ? 'light' : 'dark';
+      app.dataset.theme = newTheme;
+
+      // Cambiar icono
+      const icon = document.querySelector('#themeToggle i');
+      icon.setAttribute('data-lucide', newTheme === 'dark' ? 'moon' : 'sun');
+      lucide.createIcons();
+    };
+
+    // Inicializar
+    setupPropertyListeners();
+    connect();
+
+    // Keep-alive cada 30s
+    setInterval(() => {
+      if (ws && ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({ type: 'ping' }));
+      }
+    }, 30000);
+  </script>
+</body>
+</html>
