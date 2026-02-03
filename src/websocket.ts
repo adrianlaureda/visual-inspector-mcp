@@ -12,6 +12,7 @@
 import { WebSocketServer, WebSocket } from 'ws';
 import fs from 'node:fs';
 import { applyCssChange } from './css-editor.js';
+import { ensurePortFree } from './port-utils.js';
 
 // Estado global del WebSocket
 let wss: WebSocketServer | null = null;
@@ -35,8 +36,12 @@ let selectionResolvers: ((element: SelectedElement) => void)[] = [];
 
 /**
  * Inicia el servidor WebSocket
+ * Si el puerto está ocupado por un proceso zombie, lo libera automáticamente.
  */
 export function startWebSocketServer(port: number): void {
+  // Liberar puerto si está ocupado por proceso zombie
+  ensurePortFree(port, true);
+
   wss = new WebSocketServer({ port });
 
   wss.on('connection', (ws) => {

@@ -11,6 +11,7 @@ import http from 'node:http';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { ensurePortFree } from './port-utils.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -18,8 +19,12 @@ let server: http.Server | null = null;
 
 /**
  * Inicia el servidor HTTP
+ * Si el puerto está ocupado por un proceso zombie, lo libera automáticamente.
  */
 export function startHttpServer(port: number): void {
+  // Liberar puerto si está ocupado por proceso zombie
+  ensurePortFree(port, true);
+
   server = http.createServer((req, res) => {
     // CORS headers para desarrollo
     res.setHeader('Access-Control-Allow-Origin', '*');
