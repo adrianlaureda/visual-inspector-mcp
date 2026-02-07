@@ -12,7 +12,6 @@
 import { WebSocketServer, WebSocket } from 'ws';
 import fs from 'node:fs';
 import { applyCssChange } from './css-editor.js';
-import { ensurePortFree } from './port-utils.js';
 
 // Estado global del WebSocket
 let wss: WebSocketServer | null = null;
@@ -35,42 +34,43 @@ export interface SelectedElement {
 let selectionResolvers: ((element: SelectedElement) => void)[] = [];
 
 /**
- * Inicia el servidor WebSocket
- * Si el puerto está ocupado por un proceso zombie, lo libera automáticamente.
+ * Inicia el servidor WebSocket con puerto dinámico (port 0 = OS asigna libre).
+ * Retorna el puerto real asignado.
  */
-export function startWebSocketServer(port: number): void {
-  // Liberar puerto si está ocupado por proceso zombie
-  ensurePortFree(port, true);
+export function startWebSocketServer(): Promise<number> {
+  return new Promise((resolve, reject) => {
+    wss = new WebSocketServer({ port: 0 });
 
-  wss = new WebSocketServer({ port });
-
-  wss.on('connection', (ws) => {
-    connectedClients.add(ws);
-
-    ws.on('message', (data) => {
-      try {
-        const message = JSON.parse(data.toString());
-        handleMessage(message, ws);
-      } catch (error) {
-        console.error('Error parseando mensaje WS:', error);
-      }
+    wss.on('listening', () => {
+      const addr = wss!.address() as import('node:net').AddressInfo;
+      resolve(addr.port);
     });
 
-    ws.on('close', () => {
-      connectedClients.delete(ws);
+    wss.on('connection', (ws) => {
+      connectedClients.add(ws);
+
+      ws.on('message', (data) => {
+        try {
+          const message = JSON.parse(data.toString());
+          handleMessage(message, ws);
+        } catch (error) {
+          console.error('Error parseando mensaje WS:', error);
+        }
+      });
+
+      ws.on('close', () => {
+        connectedClients.delete(ws);
+      });
+
+      ws.on('error', (error) => {
+        console.error('Error en WebSocket:', error);
+        connectedClients.delete(ws);
+      });
     });
 
-    ws.on('error', (error) => {
-      console.error('Error en WebSocket:', error);
-      connectedClients.delete(ws);
+    wss.on('error', (error) => {
+      reject(error);
     });
-  });
-
-  wss.on('error', (error) => {
-    // Si el puerto está en uso, intentar cerrar y reintentar
-    if ((error as NodeJS.ErrnoException).code === 'EADDRINUSE') {
-      console.error(`Puerto ${port} en uso. Cierra otras instancias del inspector.`);
-    }
   });
 }
 

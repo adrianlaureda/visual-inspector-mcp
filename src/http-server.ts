@@ -3,7 +3,7 @@
  *
  * Sirve la web app del inspector visual.
  * Rutas:
- * - GET / → web app principal
+ * - GET / → web app principal (con WS_PORT inyectado)
  * - GET /health → health check
  */
 
@@ -11,64 +11,65 @@ import http from 'node:http';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { ensurePortFree } from './port-utils.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 let server: http.Server | null = null;
+let injectedWsPort: number = 0;
 
 /**
- * Inicia el servidor HTTP
- * Si el puerto está ocupado por un proceso zombie, lo libera automáticamente.
+ * Inicia el servidor HTTP con puerto dinámico (port 0 = OS asigna libre).
+ * Inyecta el puerto WS en el HTML servido para que la web app sepa dónde conectar.
+ * Retorna el puerto real asignado.
  */
-export function startHttpServer(port: number): void {
-  // Liberar puerto si está ocupado por proceso zombie
-  ensurePortFree(port, true);
+export function startHttpServer(wsPort: number): Promise<number> {
+  injectedWsPort = wsPort;
 
-  server = http.createServer((req, res) => {
-    // CORS headers para desarrollo
-    res.setHeader('Access-Control-Allow-Origin', '*');
-    res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
-    res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  return new Promise((resolve, reject) => {
+    server = http.createServer((req, res) => {
+      // CORS headers para desarrollo
+      res.setHeader('Access-Control-Allow-Origin', '*');
+      res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
+      res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
 
-    if (req.method === 'OPTIONS') {
-      res.writeHead(204);
-      res.end();
-      return;
-    }
+      if (req.method === 'OPTIONS') {
+        res.writeHead(204);
+        res.end();
+        return;
+      }
 
-    const url = new URL(req.url || '/', `http://localhost:${port}`);
+      const url = new URL(req.url || '/', `http://localhost`);
 
-    switch (url.pathname) {
-      case '/':
-      case '/index.html':
-        serveWebApp(res);
-        break;
+      switch (url.pathname) {
+        case '/':
+        case '/index.html':
+          serveWebApp(res);
+          break;
 
-      case '/health':
-        res.writeHead(200, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ status: 'ok' }));
-        break;
+        case '/health':
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ status: 'ok' }));
+          break;
 
-      default:
-        res.writeHead(404, { 'Content-Type': 'text/plain' });
-        res.end('Not Found');
-    }
-  });
+        default:
+          res.writeHead(404, { 'Content-Type': 'text/plain' });
+          res.end('Not Found');
+      }
+    });
 
-  server.listen(port, () => {
-    // Servidor HTTP listo (no logueamos para no interferir con stdio MCP)
-  });
+    server.listen(0, () => {
+      const addr = server!.address() as import('node:net').AddressInfo;
+      resolve(addr.port);
+    });
 
-  server.on('error', (error) => {
-    if ((error as NodeJS.ErrnoException).code === 'EADDRINUSE') {
-      console.error(`Puerto ${port} en uso.`);
-    }
+    server.on('error', (error) => {
+      reject(error);
+    });
   });
 }
 
 /**
- * Sirve la web app desde el archivo HTML
+ * Sirve la web app inyectando el puerto WS como variable global
  */
 function serveWebApp(res: http.ServerResponse): void {
   // Buscar el archivo HTML en la carpeta web (dentro de dist o fuera)
@@ -84,8 +85,12 @@ function serveWebApp(res: http.ServerResponse): void {
       return;
     }
 
+    // Inyectar puerto WS antes del primer <script> del body
+    const wsScript = `<script>window.WS_PORT = ${injectedWsPort};</script>`;
+    const modified = content.replace('<head>', `<head>\n  ${wsScript}`);
+
     res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
-    res.end(content);
+    res.end(modified);
   });
 }
 

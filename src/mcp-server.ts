@@ -28,12 +28,10 @@ import { applyCssChange as applyChange } from './css-editor.js';
 // Estado del archivo actualmente inspeccionado
 let currentFilePath: string | null = null;
 
-const HTTP_PORT = 8080;
-
 /**
- * Inicia el servidor MCP
+ * Inicia el servidor MCP. Recibe el puerto HTTP real para abrir el navegador.
  */
-export async function startMcpServer(): Promise<void> {
+export async function startMcpServer(httpPort: number): Promise<void> {
   const server = new McpServer({
     name: 'visual-inspector',
     version: '1.0.0'
@@ -75,7 +73,7 @@ export async function startMcpServer(): Promise<void> {
       sendFileContent(absolutePath, content);
 
       // Abrir Chrome en modo app (ventana limpia sin barra de navegación)
-      const url = `http://localhost:${HTTP_PORT}`;
+      const url = `http://localhost:${httpPort}`;
       spawn('open', ['-na', 'Google Chrome', '--args', `--app=${url}`], {
         detached: true,
         stdio: 'ignore'

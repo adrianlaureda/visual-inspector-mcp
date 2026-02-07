@@ -646,8 +646,8 @@
   </div>
 
   <script>
-    // Configuración WebSocket
-    const WS_PORT = 7777;
+    // Puerto WS inyectado por el servidor HTTP (window.WS_PORT)
+    const WS_PORT = window.WS_PORT;
     let ws = null;
     let reconnectInterval = null;
     let currentFilePath = null;
