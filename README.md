@@ -13,8 +13,8 @@ Servidor MCP para inspeccionar y editar HTML visualmente desde Claude Code, con 
 ┌──────────────────────▼──────────────────────────────────────┐
 │  visual-inspector-mcp (Node.js)                             │
 │  - Servidor MCP (stdio)                                     │
-│  - Servidor HTTP (puerto 8080)                              │
-│  - Servidor WebSocket (puerto 7777)                         │
+│  - Servidor HTTP (puerto dinámico)                          │
+│  - Servidor WebSocket (puerto dinámico)                     │
 │  - File watcher para hot reload                             │
 └──────────────────────┬──────────────────────────────────────┘
                        │ WebSocket
@@ -28,13 +28,13 @@ Servidor MCP para inspeccionar y editar HTML visualmente desde Claude Code, con 
 
 ## Herramientas MCP
 
-| Herramienta | Descripción |
-|-------------|-------------|
-| `inspect_html` | Abre el visualizador para un archivo HTML |
+| Herramienta            | Descripción                                               |
+| ---------------------- | --------------------------------------------------------- |
+| `inspect_html`         | Abre el visualizador para un archivo HTML                 |
 | `get_selected_element` | Obtiene el elemento seleccionado (selector, tag, estilos) |
-| `highlight_element` | Resalta un elemento por selector CSS |
-| `apply_css_change` | Aplica cambios CSS al archivo |
-| `close_inspector` | Cierra el visualizador |
+| `highlight_element`    | Resalta un elemento por selector CSS                      |
+| `apply_css_change`     | Aplica cambios CSS al archivo                             |
+| `close_inspector`      | Cierra el visualizador                                    |
 
 ### Ejemplos de uso
 
@@ -55,7 +55,7 @@ Claude: [usa apply_css_change con selector="h1.titulo", property="color", value=
 ### 1. Compilar el proyecto
 
 ```bash
-cd ~/Proyectos/Claude/visual-inspector-mcp
+cd ~/Proyectos/Claude/desarrollos/mcp/visual-inspector-mcp
 npm install
 npm run build
 ```
@@ -63,6 +63,7 @@ npm run build
 ### 2. Configurar MCP
 
 El MCP ya está configurado en:
+
 - `~/.mcp.json` - Definición del servidor
 - `~/.claude/settings.json` - Habilitado en `enabledMcpjsonServers`
 
@@ -72,6 +73,16 @@ El MCP ya está configurado en:
 # Cerrar Claude Code actual y abrir de nuevo
 claude
 ```
+
+## Nota importante de build
+
+Si cambias `web/index.html`, recompila para mantener `dist/` sincronizado:
+
+```bash
+npm run build
+```
+
+Si `dist/web/index.html` queda desactualizado, puede romperse la conexión WebSocket del visualizador.
 
 ## Uso
 
@@ -114,8 +125,8 @@ visual-inspector-mcp/
 ├── src/
 │   ├── index.ts           # Entry point
 │   ├── mcp-server.ts      # Herramientas MCP
-│   ├── http-server.ts     # Servidor web (8080)
-│   ├── websocket.ts       # Comunicación bidireccional (7777)
+│   ├── http-server.ts     # Servidor web (puerto dinámico)
+│   ├── websocket.ts       # Comunicación bidireccional (puerto dinámico)
 │   ├── file-watcher.ts    # Hot reload
 │   └── css-editor.ts      # Edición de archivos CSS
 ├── web/
@@ -127,10 +138,29 @@ visual-inspector-mcp/
 
 ## Puertos utilizados
 
-| Puerto | Uso |
-|--------|-----|
-| 8080 | Servidor HTTP (web app) |
-| 7777 | WebSocket (comunicación bidireccional) |
+| Puerto              | Uso                                    |
+| ------------------- | -------------------------------------- |
+| dinámico (`port=0`) | Servidor HTTP (web app)                |
+| dinámico (`port=0`) | WebSocket (comunicación bidireccional) |
+
+El servidor inyecta `window.WS_PORT` en la web app y el cliente debe usar:
+
+```js
+const WS_PORT = window.WS_PORT || 7777;
+```
+
+## Troubleshooting rápido
+
+### Error: `No hay visualizador conectado. Usa inspect_html primero.`
+
+Checklist:
+
+1. Reabrir visualizador con `inspect_html`.
+2. Verificar que el HTML servido contiene `window.WS_PORT`:
+   - `curl -s http://localhost:<puerto_http> | rg "window.WS_PORT"`
+3. Verificar que el cliente usa `window.WS_PORT || 7777` en `web/index.html` y `dist/web/index.html`.
+4. Si cambiaste `web/index.html`, ejecutar `npm run build`.
+5. Reiniciar Codex/cliente MCP si persiste.
 
 ## Limitaciones conocidas
 
